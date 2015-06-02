@@ -20,7 +20,7 @@ USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:31.0) Gecko/20100101 Firefox/31
 DEPTH_LIMIT = 15
 DOWNLOAD_DELAY = 0.5
 
-LOG_LEVEL = 'INFO'
+LOG_LEVEL = 'DEBUG'
 LOG_FILE = 'news-scrap.log'
 
 # following are for breadth-first search
