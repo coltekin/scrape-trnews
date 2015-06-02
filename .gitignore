@@ -1,3 +1,6 @@
 *.pyc
 news-scrap.log
-radikal
+/crawls/
+/radikal/
+/cumhuriyet/
+/t24/
