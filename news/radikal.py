@@ -11,7 +11,7 @@ sys.setdefaultencoding('utf-8')
 
 
 class Radikal:
-    newspaper = "radikal"
+    name = "radikal"
     allow = ["www.radikal.com.tr"]
     data_path = "radikal"
     start_urls = ('http://www.radikal.com.tr/',)
@@ -173,7 +173,7 @@ class Radikal:
             fp.write('  <summary>\n%s\n  </summary>\n' % summary)
             fp.write('  <category>%s</category>\n' % category)
             fp.write('  <article_id>%s</article_id>\n' % aId)
-            fp.write('  <newspaper>%s</newspaper>\n' % newspaper)
+            fp.write('  <newspaper>%s</newspaper>\n' % Radikal.name)
             fp.write('  <url>%s</url>\n' % response.url)
             fp.write('  <content>\n%s\n  </content>\n' % content)
             fp.write('</article>\n')

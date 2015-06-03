@@ -9,9 +9,10 @@ import sys, os, re
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
+from bs4 import BeautifulSoup
 
 class Milliyet:
-    newspaper = "milliyet"
+    name = "milliyet"
     allow = ["www.milliyet.com.tr"]
     data_path = "milliyet"
     start_urls = ('http://www.milliyet.com.tr/',)
@@ -22,19 +23,38 @@ class Milliyet:
                       "(?P<id1>[0-9]+)/"
                       "default.htm"
                       "|"
-                      "www.milliyet.com.tr/.+-"
-                      "(?<cat2>"
+                      "www.milliyet.com.tr/.+(?P<typ2>-)"
+                      "(?P<cat2>"
                       "magazin|"
                       "gundem|"
+                      "sinema|"
+                      "kitap|"
+                      "teknoloji|bilim|internet|cevre|denedik|sektorel|uzay|bilisim|mobildunya|dijitalfotograf|"
+                      "-[^-]+-yerelhaber|"
+                      "oyundunyasi|konut|yerelhaber|otomobil|"
+                      "yereletkinlik|universite|otoyazarlar|okuloncesiegitim|"
+                      "lise|egitimyurtdisi|egitimsbs|egitimdunyasi|egitimdigersinavlar|"
+                      "ygs|motorsporlari|ilkogretim|dapyapi|egitimoss|ticariarac|bakimpratik|"
+                      "otoguncel|otokampanya|konsept|motosiklet|yenimodel|tatil|"
                       "egitim)-"
-                      "(?<id2>[0-9]+)/"
+                      "(?P<id2>[0-9]+)/"
                       "|"
                       "www.milliyet.com.tr/.+"
-                      "(?P<cat3>[^/]+)/"
-                      "(?P<typ3>haberdetayarsiv|gundemyazardetay)/"
+                      "(?P<cat3>cadde|cumartesi|pazar|tatil)/"
+                      "(?P<typ3>haberdetayarsiv|gundemyazardetay|haberdetay|yazardetay)/"
                       "[0-9][0-9]\.[0-9][0-9]\.[0-9][0-9][0-9][0-9]/"
                       "(?P<id3>[0-9]+)/"
                       "default.htm"
+                      "|"
+                      "www.milliyet.com.tr/.+-"
+                      "(?P<cat4>[^-]+)-"
+                      "(?P<id4>[0-9]+)"
+                      "-(?P<typ4>skorer-yazar-yazisi|skorerhaber)/"
+                      "|"
+                      "www.milliyet.com.tr/.+"
+                      "-pembenar-(?P<typ5>detay|yazardetay)"
+                      "-(?P<cat5>[^-]+)"
+                      "-(?P<id5>[0-9]+)/"
     )
 
 #
@@ -43,9 +63,14 @@ class Milliyet:
 #                      "-(P<id>[0-9]+)/"
 #
 
-    deny_pattern = (r"ArsivAramaSonuc|Milliyet-Tv|Skorer-Tv|/fotogaleri/"
-                     "|galeri-[0-9]+/"
+    deny_pattern = (r"/arama|ArsivAramaSonuc|SkorerArama"
+                     "|Milliyet-Tv|Skorer-Tv|/fotogaleri/"
+                     "|-galeri-/"
                      "|dijitalfotograf"
+                     "| "
+                     "|\n"
+                     "|\r"
+                     "|skorergaleri/"
                 )
 
     deny_re = re.compile(deny_pattern)
@@ -55,25 +80,40 @@ class Milliyet:
         self.log = logger
         self.page_scraped = 0
 
+    def get_first_match(self, response, paths):
+        """Return the first extracted xpath or None
+        """
+        result = None
+        for p in paths:
+            try:
+                result = (response
+                    .xpath(p)
+                    .extract()[0]
+                    .encode('utf-8')
+                )
+                if result:
+                    break
+            except:
+                pass
+        return result
+
     def extract(self, response):
 #        self.log('Match: %s.' % response.url, level=log.INFO)
 
         try:
             m = re.search(Milliyet.allow_re, response.url)
-            aId = m.group('id1')
-            if aId:
-                category = m.group('cat1')
-                article_type = m.group('typ1')
-            elif aid = m.group('id2'):
-                category = m.group('cat2')
-                article_type = ""
-            elif aid = m.group('id3'):
-                category = m.group('cat3')
-                article_type = m.group('typ3')
+            layout = 1
+            for i in list(range(1,6)):
+                aId = m.group('id%d' % i)
+                if aId:
+                    category = m.group('cat%d' % i)
+                    article_type = m.group('typ%d' % i)
+                    layout = i
+                    break
         except:
-#            e = sys.exc_info()[0]
+            e = sys.exc_info()[0]
 #            self.log(e, level=log.WARNING)
-            self.log('URL %s does not match.' % response.url, 
+            self.log('URL %s does not match.' % response.url + e, 
                 level=log.WARNING)
             return
 
@@ -92,103 +132,87 @@ class Milliyet:
         self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
                 level=log.INFO)
 
-        c_xpath = '//div[@id="divAdnetKeyword3"]'
-        if category == 'cadde':
-            a_xpath = '//div[@class="ynfo"]/a[@class="yadi"]/text()'
-            t_xpath = '//h1[@itemprop="name"]/text()'
-            t2_xpath = '//h1[@itemprop="name"]/following-sibling::h2/text()'
-            d_xpath = '//div[@class="tTools"]//span/text()'
-        else:
-            a_xpath = '//div[@class="yazarBox"]//strong[@itemprop="name"]/text()'
-            t_xpath = '//div[@class="detayTop"]//h1/text()'
-            t2_xpath = '//div[@class="detayTop"]//h2/text()'
-            d_xpath = '//div[@class="detayTop"]//div[@class="date"]/text()'
-
-        try: 
-            author = (response
-                .xpath(a_xpath)
-                .extract()[0]
-                .encode('utf-8')
+        author = self.get_first_match(response, 
+                ('//div[@class="ynfo"]/a[@class="yadi"]/text()',
+                 '//div[@class="yazarBox"]//strong[@itemprop="name"]/text()',
+                 '//div[@class="authnfo"]/a[@class="yname"]/strong/text()',
+                 '//div[@class="contentY"]/p[1]/strong/text()',
+                 '//div[@class="writer"]//span[@class="wname"]/text()',
+                 '//p[@class="imza"]/text()',)
             )
-        except:
-            author = ""
 
-        if not author:
-            if article_type == 'ydetay':
-                self.log("No author in: %s" % response.url,
-                    level=log.WARNING)
+        if not author and article_type in {'ydetay', 'gundemyazardetay', 'yazardetay', 'skorer-yazar-yazisi'}:
+            author = ""
+            self.log("No author in: %s" % response.url,
+                level=log.WARNING)
         editor = ""
 
-        try: 
-            title = (response
-                .xpath(t_xpath)
-                .extract()[0]
-                .encode('utf-8')
+
+        title = self.get_first_match(response, 
+                ('//h1[@itemprop="name"]/text()',
+                 '//div[@class="detayTop"]//h1/text()',
+                 '//div[@class="dContent"]//h1[@class="trc"]/text()',
+                 '//input[@id="hiddenTitle"]/@value',
+                 '//div[@class="haber"]/div[@class="tcontent"]/h3/text()',)
             )
-        except:
+
+        if not title:
             title = ""
-            self.log("Cannot find title in: %s" % response.url, 
+            self.log("No title in: %s" % response.url, 
                     level=log.WARNING)
 
         source = ""
 
-        updated = ""
-        try: 
-            pubdate = (response
-                .xpath('//meta[@itemprop="datePublished"]/@content')
-                .extract()[0]
-                .encode('utf-8')
-                .strip()
+        pubdate = self.get_first_match(response, 
+                ('//meta[@itemprop="datePublished"]/@content',
+                 '//div[@class="tTools"]//span/text()',
+                 '//div[@class="detayTop"]//div[@class="date"]/text()',
+                 '//div[@class="tools"]/div[@class="dt"]/text()',)
             )
-            if pubdate:
-                updated = (response
-                    .xpath('//meta[@itemprop="dateModified"]/@content')
-                    .extract()[0]
-                    .encode('utf-8')
-                    .strip()
-                )
-        except:
-            try:
-                pubdate = (response
-                    .xpath(d_xpath)
-                    .extract()[0]
-                    .encode('utf-8')
-                    .strip()
-                )
-                if "|" in pubdate:
-                    pub, upd = pubdate.split("|")
-                    pubdate = pub.strip()
-                    updated = upd.strip()
-            except:
-                pubdate = ""
-                self.log("Cannot find pubdate in: %s" % response.url, 
-                        level=log.WARNING)
 
-        try:
-            subtitle = (response
-                .xpath(t2_xpath)
-                .extract()[0]
-                .encode('utf-8')
+        updated = self.get_first_match(response, 
+                ('//meta[@itemprop="dateModified"]/@content')
             )
-        except:
-            subtitle = ''
-            self.log("Cannot find subtitle in: %s" % response.url,
-                    level=log.DEBUG)
 
-        try:
-            content = (response
-                .xpath(c_xpath)
-                .extract()[0]
-                .encode('utf-8')
-                .replace('\r', '')
-            )
-        except:
-            content = ''
-            self.log("Cannot find content in: %s" % response.url,
+        if pubdate and "|" in pubdate:
+            pub, upd = pubdate.split("|")
+            pubdate = pub.strip()
+            updated = upd.strip()
+        else:
+            if not updated:
+                updated = ""
+
+        if not pubdate:
+            pubdate = ""
+            self.log("No pubdate in: %s" % response.url, 
                     level=log.WARNING)
 
+
+        subtitle = self.get_first_match(response, 
+                ('//h1[@itemprop="name"]/following-sibling::h2/text()',
+                 '//div[@class="detayTop"]//h2/text()',
+                 '//h1[@class="trc"]/following-sibling::h2/text()',)
+            )
+
+        content = self.get_first_match(response, 
+                ('//div[@id="divAdnetKeyword3"]',
+                 '//div[@id="artbody" or @id="articleBody"]')
+            )
+
+        if not content:
+            content = ''
+            self.log("No content in: %s" % response.url,
+                    level=log.WARNING)
+
+        soup = BeautifulSoup(content, features="xml")
+        for s in soup('script'): s.decompose()
+        content = (soup.prettify()
+                      .replace('<?xml version="1.0" encoding="utf-8"?>\n', '')
+                      .encode('utf-8')
+                  )
+
         summary = ""
-        if article_type == "detay":
+        if article_type in {"detay", "haberdetay", "haberdetayarsiv", "skorerhaber"}:
             summary = subtitle
             subtitle = ""
 
@@ -204,7 +228,7 @@ class Milliyet:
             fp.write('  <summary>\n%s\n  </summary>\n' % summary)
             fp.write('  <category>%s</category>\n' % category)
             fp.write('  <article_id>%s</article_id>\n' % aId)
-            fp.write('  <newspaper>%s</newspaper>\n' % newspaper)
+            fp.write('  <newspaper>%s</newspaper>\n' % Milliyet.name)
             fp.write('  <url>%s</url>\n' % response.url)
             fp.write('  <content>\n%s\n  </content>\n' % content)
             fp.write('</article>\n')

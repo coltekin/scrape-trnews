@@ -7,6 +7,7 @@
 
 from scrapy.exceptions import CloseSpider
 from scrapy.exceptions import IgnoreRequest
+from scrapy.http import TextResponse
 from scrapy import log
 import sys, os, signal
 
@@ -28,21 +29,18 @@ class ExitOn400:
 
 class LogResponseCode:
     def process_response(self, request, response, spider):
+        if request.url == 'http://www.milliyet.com.tr/':
+            r = TextResponse(url = request.url, body = response.body, encoding = 'UTF-8')
+            log.msg("Encodign for http://www.milliyet.com.tr/: %s" %
+                    response.encoding, log.WARNING, spider=spider)
         if response.status == 400:
             log.msg("Received HTTP status %d for %s" %
                     (response.status, request.url), log.WARNING, spider=spider)
-            log.msg("Method: %s" %
-                    (request.method), log.WARNING, spider=spider)
-            log.msg("Headers: \n%s\n" %
-                    (request.headers), log.WARNING, spider=spider)
-            log.msg("Body: \n%s\n" %
-                    (request.body), log.WARNING, spider=spider)
-            log.msg("Cookies: \n%s\n" %
-                    (request.cookies), log.WARNING, spider=spider)
-            log.msg("Encoding: \n%s\n" %
-                    (request.encoding), log.WARNING, spider=spider)
-            pgid = os.getpgid(0)
-            os.kill(pgid, signal.CTRL_C_EVENT)
+            log.msg("Method: %s\nHeaders: \n%s\nBody: \n%s\nCookies: \n%s\nEncoding: \n%s\n" %
+                    (request.method, request.headers, request.body, request.cookies, request.encoding), 
+                    log.WARNING, spider=spider)
+#            pgid = os.getpgid(0)
+#            os.kill(pgid, signal.CTRL_C_EVENT)
         return response
 
 class SpiderClosing:

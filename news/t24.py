@@ -11,7 +11,7 @@ sys.setdefaultencoding('utf-8')
 
 
 class T24:
-    newspaper = "t24"
+    name = "t24"
     allow = ["t24.com.tr"]
     data_path = "t24"
     start_urls = ('http://t24.com.tr/',)
@@ -148,7 +148,7 @@ class T24:
             fp.write('  <summary>\n%s\n  </summary>\n' % summary)
             fp.write('  <category>%s</category>\n' % category)
             fp.write('  <article_id>%s</article_id>\n' % aId)
-            fp.write('  <newspaper>%s</newspaper>\n' % newspaper)
+            fp.write('  <newspaper>%s</newspaper>\n' % T24.name)
             fp.write('  <url>%s</url>\n' % response.url)
             fp.write('  <content>\n%s\n  </content>\n' % content)
             fp.write('</article>\n')

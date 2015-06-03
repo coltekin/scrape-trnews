@@ -25,9 +25,9 @@ LOG_FILE = 'news-scrap.log'
 
 # following are for breadth-first search
 #
-# DEPTH_PRIORITY = 1
-# SCHEDULER_DISK_QUEUE = 'scrapy.squeue.PickleFifoDiskQueue'
-# SCHEDULER_MEMORY_QUEUE = 'scrapy.squeue.FifoMemoryQueue'
+DEPTH_PRIORITY = 1
+SCHEDULER_DISK_QUEUE = 'scrapy.squeue.PickleFifoDiskQueue'
+SCHEDULER_MEMORY_QUEUE = 'scrapy.squeue.FifoMemoryQueue'
 
 
 AUTOTHROTTLE_ENABLED = True
