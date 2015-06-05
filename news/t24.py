@@ -143,7 +143,7 @@ class T24:
             fp.write('  <pubdate>%s</pubdate>\n' % pubdate)
             fp.write('  <editor>%s</editor>\n' % editor)
             fp.write('  <title>%s</title>\n' % title)
-            fp.write('  <subtitle>%s</subtitle>\n' % title)
+            fp.write('  <subtitle>%s</subtitle>\n' % subtitle)
             fp.write('  <source>%s</source>\n' % source)
             fp.write('  <summary>\n%s\n  </summary>\n' % summary)
             fp.write('  <category>%s</category>\n' % category)

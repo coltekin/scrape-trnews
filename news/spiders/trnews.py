@@ -3,6 +3,8 @@ import scrapy
 from scrapy.contrib.spiders import CrawlSpider, Rule
 from scrapy.contrib.linkextractors import LinkExtractor
 from scrapy import log
+from scrapy import signals
+from scrapy.xlib.pydispatch import dispatcher
 
 import gzip
 import sys, os, re
@@ -44,11 +46,16 @@ class TrNewsSpider(CrawlSpider):
 
     def __init__(self):
         super(TrNewsSpider, self).__init__()
+        dispatcher.connect(self.spider_closed, signals.spider_closed)
         self.parser = set()
 #        self.radikal = Radikal(logger=self.log)
         for cls in crawl_sites:
             self.parser.add((cls(logger=self.log), cls.allow_re))
             self.req_count = 0
+
+    def spider_closed(self, spider):
+        for p, r in self.parser:
+            p.close()
 
     def parse_news(self, response):
         for p, r in self.parser:
@@ -57,6 +64,7 @@ class TrNewsSpider(CrawlSpider):
                 return
 
     def log_skipped(self, response):
-        self.log("Skipping %s " % response.url, level=log.INFO)
+        if not re.search(Milliyet.deny_re, response.url):
+            self.log("Skipping %s " % response.url, level=log.INFO)
 #        pass
 #        if not re.search(r'www.cumhuriyet.com.tr/(video|foto|zaman_tuneli)/', response.url):
