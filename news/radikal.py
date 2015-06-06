@@ -3,11 +3,16 @@ import scrapy
 from scrapy.contrib.spiders import CrawlSpider, Rule
 from scrapy.contrib.linkextractors import LinkExtractor
 from scrapy import log
+import datetime
 
-import gzip
 import sys, os, re
 reload(sys)
 sys.setdefaultencoding('utf-8')
+
+from bs4 import BeautifulSoup
+
+from news.util import write_content, get_first_match, normalize_date
+
 
 
 class Radikal:
@@ -16,7 +21,8 @@ class Radikal:
     data_path = "radikal"
     start_urls = ('http://www.radikal.com.tr/',)
 
-    allow_pattern = (r"www.radikal.com.tr/("
+    allow_pattern = (r"www.radikal.com.tr/"
+                  "(?P<cat>"
                    "astroloji|"
                    "cevre|"
                    "dunya|"
@@ -35,145 +41,139 @@ class Radikal:
                    "yemek_tarifleri|"
                    "yenisoz|"
                    "[^/]*_haber)"
-                   "/.+"
+                   "/.+-"
+                   "(?P<id>[0-9]+) *$"
     )
 
     allow_re = re.compile(allow_pattern)
 
+    deny_pattern = r"/arama/"
+
+    deny_re = re.compile(deny_pattern)
+    allow_re = re.compile(allow_pattern)
+
     def __init__(self, logger=None):
         self.log = logger
+        self.article_ids = set()
+        if (os.path.exists(self.__class__.name + '.article_ids')):
+            with open(self.__class__.name + '.article_ids', "r") as fp:
+                for line in fp:
+                    self.article_ids.add(int(line.strip()))
         self.page_scraped = 0
 
+    def close(self):
+        with open(self.__class__.name + '.article_ids', "w") as fp:
+            for aid in self.article_ids:
+                fp.write("%s\n" % aid)
+
     def extract(self, response):
-        self.log('Match: %s.' % response.url, level=log.INFO)
-        try:
-            aId = (response
-                .xpath('//input[@name="ArticleID" and @type="hidden"]/@value')
-                .extract()[0]
-                .encode('utf-8')
-            )
-        except:
-            self.log('No article id for %s, skipping.' % response.url, 
-                level=log.WARNING)
-            return
-
-        d = Radikal.data_path + "/" + aId[:2] + "/" + aId[2:4]
-        if not os.path.isdir(d):
-            os.makedirs(d)
-        f = d + "/" + aId + ".gz"
-        if os.path.exists(f):
-            self.log('Article %s exists (%s), skipping.' % 
-                (aId, response.url), level=log.INFO)
-            return
 
         try:
-            category = re.search(Radikal.allow_re, response.url).group(1)
+            m = re.search(self.__class__.allow_re, response.url)
+            aId = m.group('id')
+            category = m.group('cat')
         except:
+#            e = sys.exc_info()[0]
             self.log('URL %s does not match.' % response.url, 
                 level=log.WARNING)
             return
 
+        aId = int(aId)
+        if (aId in self.article_ids):
+            self.log('Article %s exists (%s), skipping.' % 
+                (aId, response.url), level=log.INFO)
+            return
+        else:
+            self.article_ids.add(aId)
+
         self.page_scraped += 1
         self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
-                level=log.INFO)
-        try: 
-            author = ( response
-                .xpath('//article//a[@class="name" and @itemprop="author"]/h3')
-                .extract()[0]
-                .encode('utf-8')
-                .replace('<h3>', '')
-                .replace('</h3>', '')
-                .split('<br>')
-            )
-        except:
-            author = []
+                level=log.DEBUG)
 
-        try:
-            editor = (response
-                .xpath('//span[@id="editorName"]/text()')
-                .extract()[0]
-                .encode('utf-8')
+        author_fname = get_first_match(response, 
+                ('//article//a[@class="name" and @itemprop="author"]/h3/text()[1]',)
             )
-        except:
-            editor = ''
 
-        if not (author or editor):
-            self.log("No author or editor in: %s" % response.url,
+        author_sname = get_first_match(response, 
+                ('//article//a[@class="name" and @itemprop="author"]/h3/text()[2]',)
+            )
+
+        if not (author_fname or author_sname):
+            author = ""
+            if category == 'koseyazisi':
+                self.log("No author in: %s" % response.url,
+                    level=log.WARNING)
+        else:
+            author = author_fname + " " + author_sname
+
+        title = get_first_match(response, 
+                ('//div[@class="text-header" and @itemprop="name"]/h1/text()',
+                 '//input[@id="hiddenTitle" and @type="hidden"]/@value',)
+            )
+
+        if not title:
+            title = ""
+            self.log("No title in: %s" % response.url, 
+                    level=log.WARNING)
+            return
+
+        pubdate = get_first_match(response, 
+                ('//article//span[@class="date" and @itemprop="datePublished"]/text()',)
+            )
+
+        if pubdate:
+            ndate = normalize_date(pubdate)
+            if not ndate: # TODO: interpolate when not fund
+                self.log("Cannot parse pubdate (%s) in: %s" % (pubdate, response.url), 
+                        level=log.WARNING)
+            else:
+                pubdate = ndate
+        else:
+            pubdate = ""
+            self.log("No pubdate in: %s" % response.url, 
                     level=log.WARNING)
 
-        try: 
-            title = (response
-                .xpath('//div[@class="text-header" and @itemprop="name"]/h1/text()')
-                .extract()[0]
-                .encode('utf-8')
+        summary = get_first_match(response, 
+                ('//article//h6[@itemprop="articleSection"]/text()',
+                 '//input[@id="hiddenSpot" and @type="hidden"]/@value',)
             )
-        except:
-            try:
-                title = (response
-                    .xpath('//input[@id="hiddenTitle" and @type="hidden"]/@value')
-                    .extract()[0]
-                    .encode('utf-8')
-                )
-            except:
-                title = ""
-                self.log("Cannot find title in: %s" % response.url, 
-                        level=log.WARNING)
 
+        if not summary:
+            summary = ""
+            self.log("No summary in: %s" % response.url, 
+                    level=log.DEBUG)
 
-        try:
-            pubdate = ( response
-                .xpath('//article//span[@class="date" and @itemprop="datePublished"]/text()')
-                .extract()[0]
-                .encode('utf-8')
+        content = get_first_match(response, 
+                ('//article//div[@itemprop="articleBody"]',)
             )
-        except:
-            pubdate = ''
-            self.log("Cannot find pubdate in: %s" % response.url,
-                    level=log.WARNING)
 
-
-        try:
-            summary = ( response
-                .xpath('//article//h6[@itemprop="articleSection"]/text()')
-                .extract()[0]
-                .encode('utf-8')
-            )
-        except:
-            try:
-                summary = (response
-                    .xpath('//input[@id="hiddenSpot" and @type="hidden"]/@value')
-                    .extract()[0]
-                    .encode('utf-8')
-                )
-            except:
-                summary = ''
-                self.log("Cannot find summary in: %s" % response.url,
-                        level=log.WARNING)
-
-        try:
-            content = ( response
-                .xpath('//article//div[@itemprop="articleBody"]')
-                .extract()[0]
-                .encode('utf-8')
-                .replace('\r', '')
-            )
-        except:
+        if not content:
             content = ''
-            self.log("Cannot find content in: %s" % response.url,
+            self.log("No content in: %s" % response.url,
                     level=log.WARNING)
+            return
 
-        with gzip.open(f, "wb") as fp:
-            fp.write('<article>\n  <author>\n')
-            for i in author:
-                fp.write('    <namepart>%s</namepart>\n' % i)
-            fp.write('  </author>\n')
-            fp.write('  <pubdate>%s</pubdate>\n' % pubdate)
-            fp.write('  <editor>%s</editor>\n' % editor)
-            fp.write('  <title>%s</title>\n' % title)
-            fp.write('  <summary>\n%s\n  </summary>\n' % summary)
-            fp.write('  <category>%s</category>\n' % category)
-            fp.write('  <article_id>%s</article_id>\n' % aId)
-            fp.write('  <newspaper>%s</newspaper>\n' % Radikal.name)
-            fp.write('  <url>%s</url>\n' % response.url)
-            fp.write('  <content>\n%s\n  </content>\n' % content)
-            fp.write('</article>\n')
+        soup = BeautifulSoup(content, features="xml")
+        for s in soup('script'): s.decompose()
+        content = (soup.prettify().encode('utf-8'))
+
+
+        fpath, success = write_content(content,
+                    title = title,
+                    author = author,
+                    pubdate = pubdate,
+                    category = category,
+                    summary = summary,
+                    article_id = aId,
+                    url = response.url,
+                    downloaded = datetime.datetime.utcnow().isoformat(),
+                    newspaper = self.__class__.name
+                )
+
+        if success:
+            self.log("Scraped: url=`%s' file=`%s'" % (response.url, fpath),
+                    level=log.INFO)
+        else:
+            self.log("Duplicate: url=`%s' file=`%s'" % (response.url, fpath),
+                    level=log.INFO)
+

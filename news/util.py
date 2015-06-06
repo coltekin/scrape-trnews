@@ -6,6 +6,8 @@ import xxhash
 import yaml
 import gzip
 import re
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 
 weekdays = (u'[pP]azartesi|[sS]alı|[çÇ]arş(\.|amba)?|[pP]er(\.|şembe)?|[cC]uma')
@@ -18,11 +20,11 @@ date_res = (
                '(?P<M>' + months + '),? +'
                ' *(' + weekdays + ')? *'
                '(?P<Y>\d{4})'
-               ' *[-,] *((?P<h>[0-2][0-9]):(?P<m>[0-6][0-9])(:(?P<s>[0-6][0-9]))?)?'),
+               '( *[-,] *(?P<h>[0-2][0-9]):(?P<m>[0-6][0-9])(:(?P<s>[0-6][0-9]))?)?'),
     re.compile(ur'(?P<D>0?[1-9]|[12][0-9]|3[01])[./]'
                '(?P<M>0?[1-9]|1[0-2])[./]'
                '(?P<Y>\d{4})'
-               ' *[-,] *(?P<h>[0-2][0-9]):(?P<m>[0-6][0-9])(:(?P<s>[0-6][0-9]))?'),
+               '( *[-,] *(?P<h>[0-2][0-9]):(?P<m>[0-6][0-9])(:(?P<s>[0-6][0-9]))?)?'),
 )
 
 month_map = {u'Ocak': '01',
@@ -47,6 +49,7 @@ def get_first_match(response, paths):
             result = (response
                 .xpath(p)
                 .extract()[0]
+                .strip()
             )
             if result:
                 break
@@ -86,7 +89,9 @@ def write_content(content, **kwargs):
         return filepath, False
 
     with open(filepath + ".meta", "wb") as fp:
-        fp.write(yaml.safe_dump(kwargs, default_flow_style = False, allow_unicode=True, indent=2, encoding="utf-8"))
+        fp.write(yaml.safe_dump(kwargs, 
+            default_flow_style = False, 
+            allow_unicode=True, indent=2, encoding="utf-8"))
 
     with gzip.open(filepath, "wb") as fp:
         fp.write(content)

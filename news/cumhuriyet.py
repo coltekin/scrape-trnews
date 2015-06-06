@@ -3,6 +3,7 @@ import scrapy
 from scrapy.contrib.spiders import CrawlSpider, Rule
 from scrapy.contrib.linkextractors import LinkExtractor
 from scrapy import log
+import datetime
 
 import sys, os, re
 reload(sys)
@@ -91,7 +92,6 @@ class Cumhuriyet:
             title = ""
             self.log("No title in: %s" % response.url, 
                     level=log.WARNING)
-            return
 
         source = get_first_match(response, 
                 ('//div[@id="content"]//div[@class="publish-date"]/div[@class="left"]/span/text()',)
@@ -150,11 +150,11 @@ class Cumhuriyet:
                     title = title,
                     author = author,
                     pubdate = pubdate,
-                    updated = updated,
                     summary = summary,
                     category = category,
                     article_id = aId,
                     url = response.url,
+                    downloaded = datetime.datetime.utcnow().isoformat(),
                     newspaper = self.__class__.name
                 )
 

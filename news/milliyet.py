@@ -3,6 +3,7 @@ import scrapy
 from scrapy.contrib.spiders import CrawlSpider, Rule
 from scrapy.contrib.linkextractors import LinkExtractor
 from scrapy import log
+import datetime
 
 import sys, os, re
 reload(sys)
@@ -152,7 +153,6 @@ class Milliyet:
             title = ""
             self.log("No title in: %s" % response.url, 
                     level=log.WARNING)
-            return
 
         pubdate = get_first_match(response, 
                 ('//meta[@itemprop="datePublished"]/@content',
@@ -228,6 +228,7 @@ class Milliyet:
                     author = author,
                     pubdate = pubdate,
                     updated = updated,
+                    downloaded = datetime.datetime.utcnow().isoformat(),
                     summary = summary,
                     category = category,
                     article_id = aId,

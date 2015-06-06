@@ -15,9 +15,10 @@ from news.radikal import Radikal
 from news.cumhuriyet import Cumhuriyet
 from news.t24 import T24
 from news.milliyet import Milliyet
+from news.zaman import Zaman
 
-crawl_sites = {Milliyet}
-#crawl_sites = {Milliyet, Radikal, T24, Cumhuriyet}
+#crawl_sites = {Zaman}
+crawl_sites = {Milliyet, Radikal, T24, Cumhuriyet, Zaman}
 
 
 class TrNewsSpider(CrawlSpider):
@@ -64,7 +65,5 @@ class TrNewsSpider(CrawlSpider):
                 return
 
     def log_skipped(self, response):
-        if not re.search(Milliyet.deny_re, response.url):
-            self.log("Skipping %s " % response.url, level=log.INFO)
+        self.log("Skipping %s " % response.url, level=log.INFO)
 #        pass
-#        if not re.search(r'www.cumhuriyet.com.tr/(video|foto|zaman_tuneli)/', response.url):
