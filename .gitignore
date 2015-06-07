@@ -1,7 +1,3 @@
 *.pyc
 news-scrap.log
-/crawls/
-/radikal/
-/cumhuriyet/
-/t24/
-/milliyet/
+trnews-data

@@ -13,25 +13,43 @@ from bs4 import BeautifulSoup
 
 from news.util import write_content, get_first_match, normalize_date
 
-class Cumhuriyet:
 
-    name = "cumhuriyet"
-    allow = ["www.cumhuriyet.com.tr"]
-    data_path = "cumhuriyet"
-    start_urls = ('http://www.cumhuriyet.com.tr/',)
 
-    allow_pattern = (r"www.cumhuriyet.com.tr/"
-                      "(?P<cat>"
-                      "koseyazisi|"
-                      "haber/[^/]+)"
-                      "/(?P<id>[0-9]+)/.+"
+class Radikal:
+    name = "radikal"
+    allow = ["www.radikal.com.tr"]
+    start_urls = ('http://www.radikal.com.tr/',)
+
+    allow_pattern = (r"www.radikal.com.tr/"
+                  "(?P<cat>"
+                   "astroloji|"
+                   "cevre|"
+                   "dunya|"
+                   "ekonomi|"
+                   "geek|"
+                   "gusto|"
+                   "hayat|"
+                   "politika|"
+                   "saglik|"
+                   "sinema|"
+                   "spor|"
+                   "teknoloji|"
+                   "turkiye|"
+                   "yasam|"
+                   "yazarlar|"
+                   "yemek_tarifleri|"
+                   "yenisoz|"
+                   "[^/]*_haber)"
+                   "/.+-"
+                   "(?P<id>[0-9]+) *$"
     )
 
-    deny_pattern = r"www.cumhuriyet.com.tr/(arama|kaydet|foto|zaman_tuneli|video)/"
+    allow_re = re.compile(allow_pattern)
+
+    deny_pattern = r"/arama/"
 
     deny_re = re.compile(deny_pattern)
     allow_re = re.compile(allow_pattern)
-
 
     def __init__(self, logger=None):
         self.log = logger
@@ -48,8 +66,6 @@ class Cumhuriyet:
                 fp.write("%s\n" % aid)
 
     def extract(self, response):
-
-
 
         try:
             m = re.search(self.__class__.allow_re, response.url)
@@ -73,40 +89,35 @@ class Cumhuriyet:
         self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
                 level=log.DEBUG)
 
-        author = get_first_match(response, 
-                ('//div[@id="author"]//div[@class="name"]/text()',)
+        author_fname = get_first_match(response, 
+                ('//article//a[@class="name" and @itemprop="author"]/h3/text()[1]',)
             )
 
-        if not author:
+        author_sname = get_first_match(response, 
+                ('//article//a[@class="name" and @itemprop="author"]/h3/text()[2]',)
+            )
+
+        if not (author_fname or author_sname):
             author = ""
             if category == 'koseyazisi':
                 self.log("No author in: %s" % response.url,
                     level=log.WARNING)
+        else:
+            author = author_fname + " " + author_sname
 
         title = get_first_match(response, 
-                ('//div[@id="article-title" and @itemprop="headline"]/text()',
-                 '//div[@id="news-header"]/h1[@class="news-title"]/text()',)
+                ('//div[@class="text-header" and @itemprop="name"]/h1/text()',
+                 '//input[@id="hiddenTitle" and @type="hidden"]/@value',)
             )
 
         if not title:
             title = ""
             self.log("No title in: %s" % response.url, 
                     level=log.WARNING)
-
-        source = get_first_match(response, 
-                ('//div[@id="content"]//div[@class="publish-date"]/div[@class="left"]/span/text()',)
-            )
-
-        if not source:
-            source = ""
-            if category != 'koseyazisi':
-                self.log("Cannot find source in: %s" %
-                    response.url, level=log.INFO)
-
+            return
 
         pubdate = get_first_match(response, 
-                ('//div[@id="content"]//div[@class="publish-date"]/div[@class="right"]/span/text()',
-                 '//div[@id="content"]//div[@id="publish-date"]/text()',)
+                ('//article//span[@class="date" and @itemprop="datePublished"]/text()',)
             )
 
         if pubdate:
@@ -121,9 +132,9 @@ class Cumhuriyet:
             self.log("No pubdate in: %s" % response.url, 
                     level=log.WARNING)
 
-
         summary = get_first_match(response, 
-                ('//div[@id="content"]//div[@id="news-header"]/div[@class="news-short"]/text()',)
+                ('//article//h6[@itemprop="articleSection"]/text()',
+                 '//input[@id="hiddenSpot" and @type="hidden"]/@value',)
             )
 
         if not summary:
@@ -132,7 +143,7 @@ class Cumhuriyet:
                     level=log.DEBUG)
 
         content = get_first_match(response, 
-                ('//div[@id="content"]//div[@id="news-body" or @id="article-body"]',)
+                ('//article//div[@itemprop="articleBody"]',)
             )
 
         if not content:
@@ -150,8 +161,8 @@ class Cumhuriyet:
                     title = title,
                     author = author,
                     pubdate = pubdate,
-                    summary = summary,
                     category = category,
+                    summary = summary,
                     article_id = aId,
                     url = response.url,
                     downloaded = datetime.datetime.utcnow().isoformat(),

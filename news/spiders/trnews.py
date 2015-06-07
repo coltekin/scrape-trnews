@@ -11,14 +11,16 @@ import sys, os, re
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
-from news.radikal import Radikal
-from news.cumhuriyet import Cumhuriyet
-from news.t24 import T24
-from news.milliyet import Milliyet
-from news.zaman import Zaman
+from extractor.radikal import Radikal
+from extractor.cumhuriyet import Cumhuriyet
+from extractor.t24 import T24
+from extractor.milliyet import Milliyet
+from extractor.zaman import Zaman
+from extractor.sabah import Sabah
+from extractor.zaytung import Zaytung
 
-#crawl_sites = {Zaman}
-crawl_sites = {Milliyet, Radikal, T24, Cumhuriyet, Zaman}
+crawl_sites = {Zaytung}
+#crawl_sites = {Milliyet, Radikal, T24, Cumhuriyet, Zaman, Sabah, Zaytung}
 
 
 class TrNewsSpider(CrawlSpider):

@@ -15,39 +15,20 @@ from news.util import write_content, get_first_match, normalize_date
 
 
 
-class Radikal:
-    name = "radikal"
-    allow = ["www.radikal.com.tr"]
-    data_path = "radikal"
-    start_urls = ('http://www.radikal.com.tr/',)
+class Sabah:
+    name = "sabah"
+    allow = ["www.sabah.com.tr"]
+    start_urls = ('http://www.sabah.com.tr/',)
 
-    allow_pattern = (r"www.radikal.com.tr/"
-                  "(?P<cat>"
-                   "astroloji|"
-                   "cevre|"
-                   "dunya|"
-                   "ekonomi|"
-                   "geek|"
-                   "gusto|"
-                   "hayat|"
-                   "politika|"
-                   "saglik|"
-                   "sinema|"
-                   "spor|"
-                   "teknoloji|"
-                   "turkiye|"
-                   "yasam|"
-                   "yazarlar|"
-                   "yemek_tarifleri|"
-                   "yenisoz|"
-                   "[^/]*_haber)"
-                   "/.+-"
-                   "(?P<id>[0-9]+) *$"
+    allow_pattern = (r"www.sabah.com.tr/"
+                      "(?P<cat>[^/]+)/((?P<subcat>[^/]+)/)?"
+                      "[0-9]{4}/[0-9]{2}/[0-9]{2}/[^/]+$"
+
     )
 
     allow_re = re.compile(allow_pattern)
 
-    deny_pattern = r"/arama/"
+    deny_pattern = r"/arama\?"
 
     deny_re = re.compile(deny_pattern)
     allow_re = re.compile(allow_pattern)
@@ -58,7 +39,7 @@ class Radikal:
         if (os.path.exists(self.__class__.name + '.article_ids')):
             with open(self.__class__.name + '.article_ids', "r") as fp:
                 for line in fp:
-                    self.article_ids.add(int(line.strip()))
+                    self.article_ids.add(line.strip())
         self.page_scraped = 0
 
     def close(self):
@@ -68,18 +49,26 @@ class Radikal:
 
     def extract(self, response):
 
-        try:
-            m = re.search(self.__class__.allow_re, response.url)
-            aId = m.group('id')
-            category = m.group('cat')
-        except:
-#            e = sys.exc_info()[0]
-            self.log('URL %s does not match.' % response.url, 
-                level=log.WARNING)
-            return
+        aId = get_first_match(response, 
+                ('//input[@id="ArticleId"]/@value',
+                 '//input[@id="articleId"]/@value',
+                 '//input[@name="ArticleId"]/@value',)
+        )
 
-        aId = int(aId)
-        if (aId in self.article_ids):
+        if not aId: # try to force HtmlResponse
+            response = scrapy.http.HtmlResponse(url=response.url,
+                    body=response.body)
+
+        aId = get_first_match(response, 
+                ('//input[@id="ArticleId"]/@value',
+                 '//input[@id="articleId"]/@value',
+                 '//input[@name="ArticleId"]/@value',)
+        )
+
+        if not aId:
+            self.log('No article id in %s.' % 
+                response.url, level=log.WARNING)
+        elif (aId in self.article_ids):
             self.log('Article %s exists (%s), skipping.' % 
                 (aId, response.url), level=log.INFO)
             return
@@ -90,25 +79,24 @@ class Radikal:
         self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
                 level=log.DEBUG)
 
-        author_fname = get_first_match(response, 
-                ('//article//a[@class="name" and @itemprop="author"]/h3/text()[1]',)
+        m = re.search(self.__class__.allow_re, response.url)
+        category = m.group('cat')
+
+
+        author = get_first_match(response, 
+                ('//div[@class="yazarList"]/ul/li/div/a/strong/text()',)
             )
 
-        author_sname = get_first_match(response, 
-                ('//article//a[@class="name" and @itemprop="author"]/h3/text()[2]',)
-            )
-
-        if not (author_fname or author_sname):
+        if not author:
             author = ""
-            if category == 'koseyazisi':
+            if category == 'yazarlar':
                 self.log("No author in: %s" % response.url,
                     level=log.WARNING)
-        else:
-            author = author_fname + " " + author_sname
 
         title = get_first_match(response, 
-                ('//div[@class="text-header" and @itemprop="name"]/h1/text()',
-                 '//input[@id="hiddenTitle" and @type="hidden"]/@value',)
+                ('//meta[@itemprop="name"]/@content',
+                 '//meta[@itemprop="headline"]/@content',
+                 '//div[@class="mail"]/strong[@class="tit"]/text()',)
             )
 
         if not title:
@@ -118,12 +106,12 @@ class Radikal:
             return
 
         pubdate = get_first_match(response, 
-                ('//article//span[@class="date" and @itemprop="datePublished"]/text()',)
+                ('//meta[@itemprop="datePublished"]/@content',)
             )
 
         if pubdate:
             ndate = normalize_date(pubdate)
-            if not ndate: # TODO: interpolate when not fund
+            if not ndate:
                 self.log("Cannot parse pubdate (%s) in: %s" % (pubdate, response.url), 
                         level=log.WARNING)
             else:
@@ -133,18 +121,22 @@ class Radikal:
             self.log("No pubdate in: %s" % response.url, 
                     level=log.WARNING)
 
-        summary = get_first_match(response, 
-                ('//article//h6[@itemprop="articleSection"]/text()',
-                 '//input[@id="hiddenSpot" and @type="hidden"]/@value',)
+        updated = get_first_match(response, 
+                ('//meta[@itemprop="dateModified"]/@content',)
             )
 
-        if not summary:
-            summary = ""
-            self.log("No summary in: %s" % response.url, 
-                    level=log.DEBUG)
+        if updated:
+            ndate = normalize_date(pubdate)
+            if not ndate:
+                updated = ""
+                self.log("Cannot parse updated (%s) in: %s" % 
+                        (pubdate, response.url), level=log.DEBUG)
+        else:
+            updated = ""
+
 
         content = get_first_match(response, 
-                ('//article//div[@itemprop="articleBody"]',)
+                ('//article[@id="contextual"]',)
             )
 
         if not content:
@@ -162,8 +154,8 @@ class Radikal:
                     title = title,
                     author = author,
                     pubdate = pubdate,
+                    updated = updated,
                     category = category,
-                    summary = summary,
                     article_id = aId,
                     url = response.url,
                     downloaded = datetime.datetime.utcnow().isoformat(),
