@@ -1,29 +1,32 @@
 # -*- coding: utf-8 -*-
 import scrapy
-from scrapy.contrib.spiders import CrawlSpider, Rule
-from scrapy.contrib.linkextractors import LinkExtractor
-from scrapy import log
-import datetime
+import re
+import anydbm
 
-import sys, os, re
-reload(sys)
-sys.setdefaultencoding('utf-8')
+from scrapy.http import Request
+import datetime
 
 from bs4 import BeautifulSoup
 
+import sys, os
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+from news_spider import NewsSpider
+
 from news.util import write_content, get_first_match, normalize_date
 
-class Zaman:
+class ZamanSpider(NewsSpider):
     name = "zaman"
-    allow = ["www.zaman.com.tr"]
+    allowed_domains = ["www.zaman.com.tr"]
     start_urls = ('http://www.zaman.com.tr/',)
 
     allow_pattern = (r"www.zaman.com.tr/"
                       "(?P<cat1>[^/]+)/"
-                      "[^/]*"
+                      "[^_]*"
                       "_(?P<id1>[0-9]+)\.html"
                       "|www.zaman.com.tr/"
-                      "(?P<cat2>[^_]+)_"
+                      "(?P<cat2>[^_]*)_"
                       "[^_]*"
                       "_(?P<id2>[0-9]+)\.html"
     )
@@ -36,20 +39,6 @@ class Zaman:
     deny_re = re.compile(deny_pattern)
     allow_re = re.compile(allow_pattern)
 
-    def __init__(self, logger=None):
-        self.log = logger
-        self.article_ids = set()
-        if (os.path.exists(self.__class__.name + '.article_ids')):
-            with open(self.__class__.name + '.article_ids', "r") as fp:
-                for line in fp:
-                    self.article_ids.add(int(line.strip()))
-        self.page_scraped = 0
-
-    def close(self):
-        with open(self.__class__.name + '.article_ids', "w") as fp:
-            for aid in self.article_ids:
-                fp.write("%s\n" % aid)
-
     def extract(self, response):
 
         try:
@@ -61,21 +50,13 @@ class Zaman:
                     break
         except:
 #            e = sys.exc_info()[0]
-            self.log('URL %s does not match.' % response.url, 
-                level=log.WARNING)
+            self.log.warning('URL %s does not match.' % response.url)
             return
 
         aId = int(aId)
-        if (aId in self.article_ids):
-            self.log('Article %s exists (%s), skipping.' % 
-                (aId, response.url), level=log.INFO)
-            return
-        else:
-            self.article_ids.add(aId)
 
         self.page_scraped += 1
-        self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
-                level=log.DEBUG)
+        self.log.debug('Scraping %s[%d]' % (response.url, self.page_scraped))
 
         author = get_first_match(response, 
                 ('//div[@class="yazarWrap"]/div/h5[@itemprop="name"]/text()',
@@ -84,8 +65,7 @@ class Zaman:
 
         if not author:
             author = ""
-            self.log("No author in: %s" % response.url,
-                level=log.WARNING)
+            self.log.warning("No author in: %s" % response.url)
 
         title = get_first_match(response, 
                 ('//div[@id="sonYazi"]/h1[@itemprop="name"]/text()',
@@ -94,8 +74,7 @@ class Zaman:
 
         if not title:
             title = ""
-            self.log("No title in: %s" % response.url, 
-                    level=log.WARNING)
+            self.log.warning("No title in: %s" % response.url)
 
         summary = get_first_match(response, 
                 ('//div[@class="imgCaption"]/span/text()',)
@@ -103,8 +82,7 @@ class Zaman:
 
         if not summary:
             summary = ""
-            self.log("No summary in: %s" % response.url, 
-                    level=log.DEBUG)
+            self.log.debug("No summary in: %s" % response.url)
 
 
 
@@ -117,14 +95,13 @@ class Zaman:
         if pubdate:
             ndate = normalize_date(pubdate)
             if not ndate:
-                self.log("Cannot parse pubdate (%s) in: %s" % (pubdate, response.url), 
-                        level=log.WARNING)
+                self.log.warning("Cannot parse pubdate (%s) in: %s" %
+                        (pubdate, response.url))
             else:
                 pubdate = ndate
         else:
             pubdate = ""
-            self.log("No pubdate in: %s" % response.url, 
-                    level=log.WARNING)
+            self.log.warning("No pubdate in: %s" % response.url)
 
         content = get_first_match(response, 
                 ('//div[@id="sonYazi"]//span[@itemprop="articleBody"]',
@@ -133,8 +110,7 @@ class Zaman:
 
         if not content:
             content = ''
-            self.log("No content in: %s" % response.url,
-                    level=log.WARNING)
+            self.log.warning("No content in: %s" % response.url)
             return
 
         soup = BeautifulSoup(content, features="xml")
@@ -155,9 +131,9 @@ class Zaman:
                 )
 
         if success:
-            self.log("Scraped: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
+            self.log.info("Scraped: url=`%s' file=`%s'" %
+                    (response.url, fpath))
         else:
-            self.log("Duplicate: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
+            self.log.info("Duplicate: url=`%s' file=`%s'" %
+                    (response.url, fpath))
 

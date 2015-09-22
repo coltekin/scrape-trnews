@@ -1,24 +1,27 @@
 # -*- coding: utf-8 -*-
 import scrapy
-from scrapy.contrib.spiders import CrawlSpider, Rule
-from scrapy.contrib.linkextractors import LinkExtractor
-from scrapy import log
-import datetime
+import re
+import anydbm
 
-import sys, os, re
-reload(sys)
-sys.setdefaultencoding('utf-8')
+from scrapy.http import Request
+import datetime
 
 from bs4 import BeautifulSoup
 
+import sys, os
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+from news_spider import NewsSpider
+
 from news.util import write_content, get_first_match, normalize_date
 
-
-
-class Radikal:
+class RadikalSpider(NewsSpider):
     name = "radikal"
-    allow = ["www.radikal.com.tr"]
-    start_urls = ('http://www.radikal.com.tr/',)
+    allowed_domains = ["radikal.com.tr"]
+    start_urls = (
+        'http://www.radikal.com.tr/',
+    )
 
     allow_pattern = (r"www.radikal.com.tr/"
                   "(?P<cat>"
@@ -44,26 +47,10 @@ class Radikal:
                    "(?P<id>[0-9]+) *$"
     )
 
-    allow_re = re.compile(allow_pattern)
-
     deny_pattern = r"/arama/"
 
-    deny_re = re.compile(deny_pattern)
     allow_re = re.compile(allow_pattern)
-
-    def __init__(self, logger=None):
-        self.log = logger
-        self.article_ids = set()
-        if (os.path.exists(self.__class__.name + '.article_ids')):
-            with open(self.__class__.name + '.article_ids', "r") as fp:
-                for line in fp:
-                    self.article_ids.add(int(line.strip()))
-        self.page_scraped = 0
-
-    def close(self):
-        with open(self.__class__.name + '.article_ids', "w") as fp:
-            for aid in self.article_ids:
-                fp.write("%s\n" % aid)
+    deny_re = re.compile(deny_pattern)
 
     def extract(self, response):
 
@@ -73,21 +60,13 @@ class Radikal:
             category = m.group('cat')
         except:
 #            e = sys.exc_info()[0]
-            self.log('URL %s does not match.' % response.url, 
-                level=log.WARNING)
+            self.log.warning('URL %s does not match.' % response.url)
             return
 
         aId = int(aId)
-        if (aId in self.article_ids):
-            self.log('Article %s exists (%s), skipping.' % 
-                (aId, response.url), level=log.INFO)
-            return
-        else:
-            self.article_ids.add(aId)
 
         self.page_scraped += 1
-        self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
-                level=log.DEBUG)
+        self.log.debug('Scraping %s[%d]' % (response.url, self.page_scraped))
 
         author_fname = get_first_match(response, 
                 ('//article//a[@class="name" and @itemprop="author"]/h3/text()[1]',)
@@ -100,8 +79,7 @@ class Radikal:
         if not (author_fname or author_sname):
             author = ""
             if category == 'koseyazisi':
-                self.log("No author in: %s" % response.url,
-                    level=log.WARNING)
+                self.log.warning("No author in: %s" % response.url)
         else:
             author = author_fname + " " + author_sname
 
@@ -112,8 +90,7 @@ class Radikal:
 
         if not title:
             title = ""
-            self.log("No title in: %s" % response.url, 
-                    level=log.WARNING)
+            self.log.warning("No title in: %s" % response.url)
             return
 
         pubdate = get_first_match(response, 
@@ -123,14 +100,12 @@ class Radikal:
         if pubdate:
             ndate = normalize_date(pubdate)
             if not ndate: # TODO: interpolate when not fund
-                self.log("Cannot parse pubdate (%s) in: %s" % (pubdate, response.url), 
-                        level=log.WARNING)
+                self.log.warning("Cannot parse pubdate (%s) in: %s" % (pubdate, response.url))
             else:
                 pubdate = ndate
         else:
             pubdate = ""
-            self.log("No pubdate in: %s" % response.url, 
-                    level=log.WARNING)
+            self.log.warning("No pubdate in: %s" % response.url)
 
         summary = get_first_match(response, 
                 ('//article//h6[@itemprop="articleSection"]/text()',
@@ -139,8 +114,7 @@ class Radikal:
 
         if not summary:
             summary = ""
-            self.log("No summary in: %s" % response.url, 
-                    level=log.DEBUG)
+            self.log.debug("No summary in: %s" % response.url)
 
         content = get_first_match(response, 
                 ('//article//div[@itemprop="articleBody"]',)
@@ -148,8 +122,7 @@ class Radikal:
 
         if not content:
             content = ''
-            self.log("No content in: %s" % response.url,
-                    level=log.WARNING)
+            self.log.warning("No content in: %s" % response.url)
             return
 
         soup = BeautifulSoup(content, features="xml")
@@ -170,9 +143,6 @@ class Radikal:
                 )
 
         if success:
-            self.log("Scraped: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
+            self.log.info("Scraped: url=`%s' file=`%s'" % (response.url, fpath))
         else:
-            self.log("Duplicate: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
-
+            self.log.info("Duplicate: url=`%s' file=`%s'" % (response.url, fpath))

@@ -1,23 +1,24 @@
 # -*- coding: utf-8 -*-
 import scrapy
-from scrapy.contrib.spiders import CrawlSpider, Rule
-from scrapy.contrib.linkextractors import LinkExtractor
-from scrapy import log
-import datetime
+import re
+import anydbm
 
-import sys, os, re
-reload(sys)
-sys.setdefaultencoding('utf-8')
+from scrapy.http import Request
+import datetime
 
 from bs4 import BeautifulSoup
 
+import sys, os
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+from news_spider import NewsSpider
+
 from news.util import write_content, get_first_match, normalize_date
 
-
-
-class Zaytung:
+class ZaytungSpider(NewsSpider):
     name = "zaytung"
-    allow = ["zaytung.com"]
+    allowed_domains = ["zaytung.com"]
     start_urls = ('http://zaytung.com/',)
 
     allow_pattern = (r"/zaytung.com/"
@@ -32,20 +33,6 @@ class Zaytung:
     deny_re = re.compile(deny_pattern)
     allow_re = re.compile(allow_pattern)
 
-    def __init__(self, logger=None):
-        self.log = logger
-        self.article_ids = set()
-        if (os.path.exists(self.__class__.name + '.article_ids')):
-            with open(self.__class__.name + '.article_ids', "r") as fp:
-                for line in fp:
-                    self.article_ids.add(int(line.strip()))
-        self.page_scraped = 0
-
-    def close(self):
-        with open(self.__class__.name + '.article_ids', "w") as fp:
-            for aid in self.article_ids:
-                fp.write("%s\n" % aid)
-
     def extract(self, response):
 
         try:
@@ -54,21 +41,13 @@ class Zaytung:
             category = m.group('cat')
         except:
 #            e = sys.exc_info()[0]
-            self.log('URL %s does not match.' % response.url, 
-                level=log.WARNING)
+            self.log.warning('URL %s does not match.' % response.url) 
             return
 
         aId = int(aId)
-        if (aId in self.article_ids):
-            self.log('Article %s exists (%s), skipping.' % 
-                (aId, response.url), level=log.INFO)
-            return
-        else:
-            self.article_ids.add(aId)
 
         self.page_scraped += 1
-        self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
-                level=log.DEBUG)
+        self.log.debug('Scraping %s[%d]' % (response.url, self.page_scraped))
 
         title = get_first_match(response, 
                 ('//div[@id="manset"]/div[1]/h2/text()',)
@@ -76,8 +55,7 @@ class Zaytung:
 
         if not title:
             title = ""
-            self.log("No title in: %s" % response.url, 
-                    level=log.WARNING)
+            self.log.warning("No title in: %s" % response.url) 
 
         content = get_first_match(response, 
                 ('//div[@id="manset"]/div[2]',)
@@ -90,8 +68,7 @@ class Zaytung:
 
         if not content:
             content = ''
-            self.log("No content in: %s" % response.url,
-                    level=log.WARNING)
+            self.log.warning("No content in: %s" % response.url)
             return
 
         soup = BeautifulSoup(content, features="xml")
@@ -101,11 +78,9 @@ class Zaytung:
         for c in soup.div.children: 
             pass
 
-        self.log("Last child: %s" % c.name, level=log.INFO)
         while c.name != u'p':
             for c in soup.div.children: 
                 pass
-            self.log("not p: %s" % c.name, level=log.INFO)
             c.extract()
         c.decompose()
 
@@ -121,9 +96,7 @@ class Zaytung:
                 )
 
         if success:
-            self.log("Scraped: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
+            self.log.info("Scraped: url=`%s' file=`%s'" % (response.url, fpath))
         else:
-            self.log("Duplicate: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
+            self.log.info("Duplicate: url=`%s' file=`%s'" % (response.url, fpath))
 

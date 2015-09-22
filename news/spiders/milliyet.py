@@ -1,23 +1,25 @@
 # -*- coding: utf-8 -*-
 import scrapy
-from scrapy.contrib.spiders import CrawlSpider, Rule
-from scrapy.contrib.linkextractors import LinkExtractor
-from scrapy import log
-import datetime
+import re
+import anydbm
 
-import sys, os, re
-reload(sys)
-sys.setdefaultencoding('utf-8')
+from scrapy.http import Request
+import datetime
 
 from bs4 import BeautifulSoup
 
+import sys, os
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+from news_spider import NewsSpider
+
 from news.util import write_content, get_first_match, normalize_date
 
-class Milliyet:
+class MilliyetSpider(NewsSpider):
     name = "milliyet"
-    allow = ["www.milliyet.com.tr"]
+    allowed_domains = ["www.milliyet.com.tr"]
     start_urls = ('http://www.milliyet.com.tr/',)
-
     allow_pattern = (r"www.milliyet.com.tr/[^/]+/"
                       "(?P<cat1>[^/]+)/"
                       "(?P<typ1>detay|ydetay)/"
@@ -30,19 +32,19 @@ class Milliyet:
                       "gundem|"
                       "sinema|"
                       "kitap|"
-                      "teknoloji|bilim|internet|cevre|denedik|sektorel|uzay|bilisim|mobildunya|dijitalfotograf|"
+                      "teknoloji|bilim|internet|cevre|denedik|sektorel|uzay|bilisim|mobildunya|dijitalfotograf|dijitaloyuncaklar|"
                       "[^-]+-yerelhaber|"
-                      "oyundunyasi|konut|otomobil|"
+                      "oyundunyasi|konut|otomobil|oyun|"
                       "universite|otoyazarlar|okuloncesiegitim|"
                       "lise|egitimyurtdisi|egitimsbs|egitimdunyasi|egitimdigersinavlar|"
                       "ygs|motorsporlari|ilkogretim|dapyapi|egitimoss|ticariarac|bakimpratik|"
-                      "otoguncel|otokampanya|konsept|motosiklet|yenimodel|tatil|"
+                      "otoguncel|otokampanya|konsept|motosiklet|yenimodel|tatil|yeniurunler|"
                       "egitim)-"
                       "(?P<id2>[0-9]+)/"
                       "|"
                       "www.milliyet.com.tr/.+"
-                      "(?P<cat3>cafe|guncel|cadde|cumartesi|pazar|tatil|gundem|spor|sinema|siyaset|yasam|magazin|dunya)/"
-                      "(?P<typ3>(haber|gundem|magazin|siyaset|magazin|dunya|spor)?(yazar)?detay(arsiv)?)/"
+                      "(?P<cat3>ege|ekonomi|cafe|guncel|cadde|cumartesi|pazar|tatil|gundem|spor|sinema|siyaset|yasam|magazin|dunya)/"
+                      "(?P<typ3>(ekonomi|haber|yeniurunler|gundem|magazin|siyaset|magazin|dunya|spor)?(yazar)?detay(arsiv)?)/"
                       "[0-9][0-9]\.[0-9][0-9]\.[0-9][0-9][0-9][0-9]/"
                       "(?P<id3>[0-9]+)/"
                       "default.htm"
@@ -81,23 +83,7 @@ class Milliyet:
                       "default.htm"
         )
 
-    def __init__(self, logger=None):
-        self.log = logger
-        self.article_ids = set()
-        if (os.path.exists(self.__class__.name + '.article_ids')):
-            with open(self.__class__.name + '.article_ids', "r") as fp:
-                for line in fp:
-                    self.article_ids.add(int(line.strip()))
-
-        self.page_scraped = 0
-
-    def close(self):
-        with open(self.__class__.name + '.article_ids', "w") as fp:
-            for aid in self.article_ids:
-                fp.write("%s\n" % aid)
-
     def extract(self, response):
-#        self.log('Match: %s.' % response.url, level=log.INFO)
 
         try:
             m = re.search(self.__class__.allow_re, response.url)
@@ -109,22 +95,13 @@ class Milliyet:
                     break
         except:
             e = sys.exc_info()[0]
-#            self.log(e, level=log.WARNING)
-            self.log('URL %s does not match.' % response.url + e, 
-                level=log.WARNING)
+            self.log.warning('URL %s does not match.' % response.url + e) 
             return
 
         aId = int(aId)
-        if (aId in self.article_ids):
-            self.log('Article %s exists (%s), skipping.' % 
-                (aId, response.url), level=log.INFO)
-            return
-        else:
-            self.article_ids.add(aId)
 
         self.page_scraped += 1
-        self.log('Scraping %s[%d]' % (response.url, self.page_scraped), 
-                level=log.DEBUG)
+        self.log.debug('Scraping %s[%d]' % (response.url, self.page_scraped)) 
 
         author = get_first_match(response, 
                 ('//div[@class="ynfo"]/a[@class="yadi"]/text()',
@@ -138,8 +115,7 @@ class Milliyet:
         if not author:
             author = ""
             if article_type == 'ydetay' or 'yazar' in article_type:
-                self.log("No author in: %s" % response.url,
-                    level=log.WARNING)
+                self.log.warning("No author in: %s" % response.url)
 
         title = get_first_match(response, 
                 ('//h1[@itemprop="name"]/text()',
@@ -151,8 +127,7 @@ class Milliyet:
 
         if not title:
             title = ""
-            self.log("No title in: %s" % response.url, 
-                    level=log.WARNING)
+            self.log.warning("No title in: %s" % response.url)
 
         pubdate = get_first_match(response, 
                 ('//meta[@itemprop="datePublished"]/@content',
@@ -181,15 +156,12 @@ class Milliyet:
         if pubdate:
             ndate = normalize_date(pubdate)
             if not ndate: # TODO: interpolate when not fund
-                self.log("Cannot parse pubdate (%s) in: %s" % (pubdate, response.url), 
-                        level=log.WARNING)
+                self.log.warning("Cannot parse pubdate (%s) in: %s" % (pubdate, response.url)) 
             else:
                 pubdate = ndate
         else:
             pubdate = ""
-            self.log("No pubdate in: %s" % response.url, 
-                    level=log.WARNING)
-
+            self.log.warning("No pubdate in: %s" % response.url)
 
         subtitle = get_first_match(response, 
                 ('//h1[@itemprop="name"]/following-sibling::h2/text()',
@@ -213,8 +185,7 @@ class Milliyet:
 
         if not content:
             content = ''
-            self.log("No content in: %s" % response.url,
-                    level=log.WARNING)
+            self.log.warning("No content in: %s" % response.url)
             return
 
         soup = BeautifulSoup(content, features="xml")
@@ -237,9 +208,7 @@ class Milliyet:
                 )
 
         if success:
-            self.log("Scraped: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
+            self.log.info("Scraped: url=`%s' file=`%s'" % (response.url, fpath))
         else:
-            self.log("Duplicate: url=`%s' file=`%s'" % (response.url, fpath),
-                    level=log.INFO)
+            self.log.info("Duplicate: url=`%s' file=`%s'" % (response.url, fpath))
 
