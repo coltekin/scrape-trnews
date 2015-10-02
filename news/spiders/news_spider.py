@@ -57,8 +57,8 @@ class NewsSpider(scrapy.Spider):
             if self.__class__.deny_re and re.search(self.__class__.deny_re, url):
                 self.log.debug('deny: %s' % url)
                 continue
-            if url in self.visited.keys():
-                self.log.debug('visited: %s' % url)
-                continue
-            self.log.debug('yielding: %s (from %s)' % (url, response.url))
-            yield(Request(url))
+            try:
+                tmp = self.visited[url]
+            except:
+                self.log.debug('yielding: %s (from %s)' % (url, response.url))
+                yield(Request(url))
