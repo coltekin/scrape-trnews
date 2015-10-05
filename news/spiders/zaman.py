@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import scrapy
 import re
-import anydbm
 
 from scrapy.http import Request
 import datetime

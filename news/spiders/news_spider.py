@@ -52,6 +52,9 @@ class NewsSpider(scrapy.Spider):
             self.visited[response.url.encode('utf8')] = "x"
 
         links = set(response.xpath("//a/@href"))
+
+
+
         for href in links:
             url = response.urljoin(href.extract()).encode('utf8')
             if self.__class__.deny_re and re.search(self.__class__.deny_re, url):
@@ -62,3 +65,10 @@ class NewsSpider(scrapy.Spider):
             except:
                 self.log.debug('yielding: %s (from %s)' % (url, response.url))
                 yield(Request(url))
+
+        for r in self.extract_extra_links(response):
+            yield r
+
+    def extract_extra_links(self, response):
+        return []
+
