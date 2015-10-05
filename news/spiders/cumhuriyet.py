@@ -28,11 +28,10 @@ class CumhuriyetSpider(NewsSpider):
                       "/(?P<id>[0-9]+)/.+"
     )
 
-    deny_pattern = r"www.cumhuriyet.com.tr/(arama|kaydet|foto|zaman_tuneli|video)/"
+    deny_pattern = r"www.cumhuriyet.com.tr/(arama|kaydet|zaman_tuneli|cizim|spor|.*foto.*|.*video.*|rss|uye|.*secim.*)/"
 
     deny_re = re.compile(deny_pattern)
     allow_re = re.compile(allow_pattern)
-
 
     def extract(self, response):
 
