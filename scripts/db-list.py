@@ -1,10 +1,8 @@
 #!/usr/bin/python
 
-import dbm,sys
+import shelve,sys
 
-print(sys.argv[1])
-
-db = dbm.open(sys.argv[1], 'r')
-for key in db.keys():
+db = shelve.open(sys.argv[1], 'r')
+for key in db:
     print(key)
 db.close()

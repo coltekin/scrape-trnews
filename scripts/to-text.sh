@@ -1,15 +1,21 @@
 #!/bin/bash
 
+UPDATE=1
+
+if [[ "$1" == "redo" ]]; then
+    UPDATE=0
+fi
+
 n=0
 for d1 in trnews-data/??;do 
     echo -n "${d1}... "
     for d2 in $d1/??;do
         for f in $d2/????????????????;do 
-            if [[ -r ${f}.txt.gz ]]; then
+            if [[ "$UPDATE" -eq 1 && -r ${f}.txt.gz ]]; then
                 continue
             fi
             timeout 60 bash -c "zcat $f \
-                | sed -n '2,\$p' \
+                | grep -v '^<?xml ' \
                 | html2text -utf8 -nometa -width 999999 -rcfile html2text.rc \
                 | gzip -c \
                 > ${f}.txt.gz \
