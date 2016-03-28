@@ -53,8 +53,6 @@ class NewsSpider(scrapy.Spider):
 
         links = set(response.xpath("//a/@href"))
 
-
-
         for href in links:
             url = response.urljoin(href.extract()).encode('utf8')
             if self.__class__.deny_re and re.search(self.__class__.deny_re, url):

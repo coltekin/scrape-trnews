@@ -17,6 +17,9 @@ NEWSPIDER_MODULE = 'news.spiders'
 LOG_LEVEL = 'INFO'
 LOG_FILE  = 'news.log'
 
+DOWNLOAD_HANDLERS = {
+    's3': None,
+}
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'news (+http://www.yourdomain.com)'
@@ -33,7 +36,7 @@ LOG_FILE  = 'news.log'
 #CONCURRENT_REQUESTS_PER_IP=16
 
 # Disable cookies (enabled by default)
-#COOKIES_ENABLED=False
+COOKIES_ENABLED=False
 
 # Disable Telnet Console (enabled by default)
 #TELNETCONSOLE_ENABLED=False

@@ -19,6 +19,7 @@ class RadikalSpider(NewsSpider):
     name = "radikal"
     allowed_domains = ["radikal.com.tr"]
     start_urls = (
+        'http://www.radikal.com.tr/yazarlar/tum_yazarlar/',
         'http://www.radikal.com.tr/',
     )
 
@@ -43,7 +44,7 @@ class RadikalSpider(NewsSpider):
                    "yenisoz|"
                    "[^/]*_haber)"
                    "/.+-"
-                   "(?P<id>[0-9]+) *$"
+                   "(?P<id>[0-9]+)/? *$"
     )
 
     deny_pattern = r"/arama/"
@@ -127,7 +128,6 @@ class RadikalSpider(NewsSpider):
         soup = BeautifulSoup(content, features="xml")
         for s in soup('script'): s.decompose()
         content = (soup.prettify().encode('utf-8'))
-
 
         fpath, success = write_content(content,
                     title = title,
